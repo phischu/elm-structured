@@ -3,6 +3,7 @@ import Graphics.Input (Input,input,clickable)
 type UID = Int
 data Expr = Plus UID Expr Expr | Value UID Int
 type SelectedExpr = {selected : UID,expr : Expr}
+
 inputexpr : Input SelectedExpr
 inputexpr = input {selected=1,expr=testexpr}
 
@@ -35,4 +36,16 @@ selectedColor selected = if selected then lightYellow else transparent
 transparent : Color
 transparent = rgba 255 255 255 0
 
-main = lift render inputexpr.signal
+type Rewrites = [Rewrite]
+type Rewrite = {names : [String],sexpr : SelectedExpr}
+
+rewrites : SelectedExpr -> Rewrites
+rewrites _ = [{names=["id"],sexpr={selected = 1,expr = testexpr}}]
+
+renderRewrites : Rewrites -> Element
+renderRewrites rewrites = flow down (map renderRewrite rewrites)
+
+renderRewrite : Rewrite -> Element
+renderRewrite rewrite = clickable inputexpr.handle rewrite.sexpr (keyword (show rewrite.names))
+
+main = lift (\sexpr -> render sexpr `beside` renderRewrites (rewrites sexpr)) inputexpr.signal
