@@ -63,7 +63,7 @@ rewrite = {selected = rewriteSelected,standard = rewriteStandard}
 rewriteSelected : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 rewriteSelected uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> returnRewrites (Expr uid (PlusF lhs rhs))))
+        bindRewrites rhsRewrites (\rhs -> [(["commute"],(Expr uid (PlusF rhs lhs)))]))
     ValueF v -> returnRewrites (Expr uid (ValueF v))
 
 rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
