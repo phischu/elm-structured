@@ -54,24 +54,43 @@ renderStandard original uid exprf = case exprf of
 keyword : String -> Element
 keyword s = leftAligned (toText s)
 
-type Rewrite a = [([String],a)]
+type Rewrites a = [Rewrite a]
+type Rewrite a = ([String],a)
 
-rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
+rewrite : Fold (Rewrites Expr)
+rewrite = {selected = rewriteSelected,standard = rewriteStandard}
+
+rewriteSelected : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
+rewriteSelected uid exprf = case exprf of
+    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
+        bindRewrites rhsRewrites (\rhs -> returnRewrites (Expr uid (PlusF lhs rhs))))
+    ValueF v -> returnRewrites (Expr uid (ValueF v))
+
+rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 rewriteStandard uid exprf = case exprf of
-    PlusF lhsrewrite rhsrewrite -> bindRewrite lhsrewrite (\lhs ->
-        bindRewrite rhsrewrite (\rhs -> returnRewrite (Expr uid (PlusF lhs rhs))))
-    ValueF v -> returnRewrite (Expr uid (ValueF v))
+    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
+        bindRewrites rhsRewrites (\rhs -> returnRewrites (Expr uid (PlusF lhs rhs))))
+    ValueF v -> returnRewrites (Expr uid (ValueF v))
 
-returnRewrite : a -> Rewrite a
-returnRewrite a = [([],a)]
+returnRewrites : a -> Rewrites a
+returnRewrites a = [([],a)]
 
-mapRewrite : (a -> b) -> Rewrite a -> Rewrite b
-mapRewrite f = map (\(n,a) -> (n,f a))
+mapRewrites : (a -> b) -> Rewrites a -> Rewrites b
+mapRewrites f = map (\(n,a) -> (n,f a))
 
-joinRewrite : Rewrite (Rewrite a) -> Rewrite a
-joinRewrite = concatMap (\(n,r) -> map (\(n',a) -> (n ++ n',a)) r)
+joinRewrites : Rewrites (Rewrites a) -> Rewrites a
+joinRewrites = concatMap (\(n,r) -> map (\(n',a) -> (n ++ n',a)) r)
 
-bindRewrite : Rewrite a -> (a -> Rewrite b) -> Rewrite b
-bindRewrite r f = joinRewrite (mapRewrite f r)
+bindRewrites : Rewrites a -> (a -> Rewrites b) -> Rewrites b
+bindRewrites r f = joinRewrites (mapRewrites f r)
 
-main = lift (\sexpr -> runFold (render sexpr) sexpr) inputexpr.signal
+renderRewrites : UID -> Rewrites Expr -> Element
+renderRewrites selecteduid = flow down . map (renderRewrite selecteduid)
+
+renderRewrite : UID -> Rewrite Expr -> Element
+renderRewrite selecteduid (name,expr) = keyword (show name)
+    |> clickable inputexpr.handle {selecteduid = selecteduid,expr = expr}
+
+main = lift (\sexpr ->
+    runFold (render sexpr) sexpr `beside`
+    renderRewrites sexpr.selecteduid (runFold rewrite sexpr)) inputexpr.signal
