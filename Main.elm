@@ -66,32 +66,35 @@ rewriteSelected uid exprf = filter ((\l -> length l > 0) . fst) (commute uid exp
 commute : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 commute uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> [(["commute"],Expr uid (PlusF rhs lhs))]))
-    ValueF v -> returnRewrites (Expr uid (ValueF v))
+        bindRewrites rhsRewrites (\rhs -> singleRewrites "commute" (plus uid rhs lhs)))
+    ValueF v -> returnRewrites (value uid v)
 
 assocl : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 assocl uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
         bindRewrites rhsRewrites (\rhs -> case rhs of
             Expr rhsuid rhsexprf -> case rhsexprf of
-                PlusF rlhs rrhs -> [(["assocl"],Expr uid (PlusF (Expr rhsuid (PlusF lhs rlhs)) rrhs))]
-                ValueF v -> returnRewrites (Expr uid (PlusF lhs rhs))))
-    ValueF v -> returnRewrites (Expr uid (ValueF v))
+                PlusF rlhs rrhs -> singleRewrites "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
+                ValueF v -> returnRewrites (plus uid lhs rhs)))
+    ValueF v -> returnRewrites (value uid v)
 
 assocr : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 assocr uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
         bindRewrites rhsRewrites (\rhs -> case lhs of
             Expr lhsuid lhsexprf -> case lhsexprf of
-                PlusF llhs lrhs -> [(["assocr"],Expr uid (PlusF llhs (Expr lhsuid (PlusF lrhs rhs))))]
-                ValueF v -> returnRewrites (Expr uid (PlusF lhs rhs))))
-    ValueF v -> returnRewrites (Expr uid (ValueF v))
+                PlusF llhs lrhs -> singleRewrites "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
+                ValueF v -> returnRewrites (plus uid lhs rhs)))
+    ValueF v -> returnRewrites (value uid v)
 
 rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 rewriteStandard uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
         bindRewrites rhsRewrites (\rhs -> returnRewrites (Expr uid (PlusF lhs rhs))))
     ValueF v -> returnRewrites (Expr uid (ValueF v))
+
+singleRewrites : String -> a -> Rewrites a
+singleRewrites s a = [([s],a)]
 
 returnRewrites : a -> Rewrites a
 returnRewrites a = [([],a)]
