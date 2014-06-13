@@ -1,7 +1,7 @@
 import Graphics.Input (Input,input,clickable)
 
 type UID = Int
-data ExprF a = PlusF a a | ValueF Int
+data ExprF a = PlusF a a | ZeroF | VariableF String
 data Expr = Expr UID (ExprF Expr)
 type SelectedExpr = {selecteduid : UID,expr : Expr}
 
@@ -18,8 +18,10 @@ runFold fold {selecteduid,expr} = case expr of
                     PlusF
                         (runFold fold {selecteduid = selecteduid,expr = lhs})
                         (runFold fold {selecteduid = selecteduid,expr = rhs})
-                ValueF v ->
-                    ValueF v)
+                ZeroF ->
+                    ZeroF
+                VariableF name ->
+                    VariableF name)
 
 inputexpr : Input SelectedExpr
 inputexpr = input {selecteduid=1,expr=testexpr}
@@ -27,11 +29,14 @@ inputexpr = input {selecteduid=1,expr=testexpr}
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
 
-value : UID -> Int -> Expr
-value uid v = Expr uid (ValueF v)
+zero : UID -> Expr
+zero uid = Expr uid ZeroF
+
+variable : UID -> String ->Expr
+variable uid name = Expr uid (VariableF name)
 
 testexpr : Expr
-testexpr = plus 0 (plus 1 (value 2 5) (value 3 8)) (value 4 4)
+testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (zero 4)
 
 render : SelectedExpr -> Fold Element
 render sexpr = {selected = renderSelected sexpr,standard = renderStandard sexpr}
@@ -48,7 +53,9 @@ renderStandard original uid exprf = case exprf of
         rhs,
         keyword ")"]
         |> clickable inputexpr.handle {selecteduid=uid,expr=original.expr}
-    (ValueF v) -> leftAligned (toText (show v))
+    ZeroF -> leftAligned (toText "0")
+        |> clickable inputexpr.handle {selecteduid=uid,expr=original.expr}
+    VariableF name -> keyword name
         |> clickable inputexpr.handle {selecteduid=uid,expr=original.expr}
 
 keyword : String -> Element
@@ -67,7 +74,8 @@ commute : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 commute uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
         bindRewrites rhsRewrites (\rhs -> singleRewrites "commute" (plus uid rhs lhs)))
-    ValueF v -> returnRewrites (value uid v)
+    ZeroF -> returnRewrites (zero uid)
+    VariableF name -> returnRewrites (variable uid name)
 
 assocl : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 assocl uid exprf = case exprf of
@@ -75,8 +83,9 @@ assocl uid exprf = case exprf of
         bindRewrites rhsRewrites (\rhs -> case rhs of
             Expr rhsuid rhsexprf -> case rhsexprf of
                 PlusF rlhs rrhs -> singleRewrites "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
-                ValueF v -> returnRewrites (plus uid lhs rhs)))
-    ValueF v -> returnRewrites (value uid v)
+                _ -> returnRewrites (plus uid lhs rhs)))
+    ZeroF -> returnRewrites (zero uid)
+    VariableF name -> returnRewrites (variable uid name)
 
 assocr : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 assocr uid exprf = case exprf of
@@ -84,14 +93,16 @@ assocr uid exprf = case exprf of
         bindRewrites rhsRewrites (\rhs -> case lhs of
             Expr lhsuid lhsexprf -> case lhsexprf of
                 PlusF llhs lrhs -> singleRewrites "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
-                ValueF v -> returnRewrites (plus uid lhs rhs)))
-    ValueF v -> returnRewrites (value uid v)
+                _ -> returnRewrites (plus uid lhs rhs)))
+    ZeroF -> returnRewrites (zero uid)
+    VariableF name -> returnRewrites (variable uid name)
 
 rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 rewriteStandard uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
         bindRewrites rhsRewrites (\rhs -> returnRewrites (Expr uid (PlusF lhs rhs))))
-    ValueF v -> returnRewrites (Expr uid (ValueF v))
+    ZeroF -> returnRewrites (zero uid)
+    VariableF name -> returnRewrites (variable uid name)
 
 singleRewrites : String -> a -> Rewrites a
 singleRewrites s a = [([s],a)]
