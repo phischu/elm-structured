@@ -54,4 +54,24 @@ renderStandard original uid exprf = case exprf of
 keyword : String -> Element
 keyword s = leftAligned (toText s)
 
+type Rewrite a = [([String],a)]
+
+rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
+rewriteStandard uid exprf = case exprf of
+    PlusF lhsrewrite rhsrewrite -> bindRewrite lhsrewrite (\lhs ->
+        bindRewrite rhsrewrite (\rhs -> returnRewrite (Expr uid (PlusF lhs rhs))))
+    ValueF v -> returnRewrite (Expr uid (ValueF v))
+
+returnRewrite : a -> Rewrite a
+returnRewrite a = [([],a)]
+
+mapRewrite : (a -> b) -> Rewrite a -> Rewrite b
+mapRewrite f = map (\(n,a) -> (n,f a))
+
+joinRewrite : Rewrite (Rewrite a) -> Rewrite a
+joinRewrite = concatMap (\(n,r) -> map (\(n',a) -> (n ++ n',a)) r)
+
+bindRewrite : Rewrite a -> (a -> Rewrite b) -> Rewrite b
+bindRewrite r f = joinRewrite (mapRewrite f r)
+
 main = lift (\sexpr -> runFold (render sexpr) sexpr) inputexpr.signal
