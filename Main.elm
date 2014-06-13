@@ -31,7 +31,7 @@ value : UID -> Int -> Expr
 value uid v = Expr uid (ValueF v)
 
 testexpr : Expr
-testexpr = plus 0 (plus 1 (value 2 5) (value 3 4)) (value 4 4)
+testexpr = plus 0 (plus 1 (value 2 5) (value 3 8)) (value 4 4)
 
 render : SelectedExpr -> Fold Element
 render sexpr = {selected = renderSelected sexpr,standard = renderStandard sexpr}
@@ -61,9 +61,30 @@ rewrite : Fold (Rewrites Expr)
 rewrite = {selected = rewriteSelected,standard = rewriteStandard}
 
 rewriteSelected : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-rewriteSelected uid exprf = case exprf of
+rewriteSelected uid exprf = filter ((\l -> length l > 0) . fst) (commute uid exprf ++ assocl uid exprf ++ assocr uid exprf)
+
+commute : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
+commute uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> [(["commute"],(Expr uid (PlusF rhs lhs)))]))
+        bindRewrites rhsRewrites (\rhs -> [(["commute"],Expr uid (PlusF rhs lhs))]))
+    ValueF v -> returnRewrites (Expr uid (ValueF v))
+
+assocl : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
+assocl uid exprf = case exprf of
+    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
+        bindRewrites rhsRewrites (\rhs -> case rhs of
+            Expr rhsuid rhsexprf -> case rhsexprf of
+                PlusF rlhs rrhs -> [(["assocl"],Expr uid (PlusF (Expr rhsuid (PlusF lhs rlhs)) rrhs))]
+                ValueF v -> returnRewrites (Expr uid (PlusF lhs rhs))))
+    ValueF v -> returnRewrites (Expr uid (ValueF v))
+
+assocr : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
+assocr uid exprf = case exprf of
+    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
+        bindRewrites rhsRewrites (\rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                PlusF llhs lrhs -> [(["assocr"],Expr uid (PlusF llhs (Expr lhsuid (PlusF lrhs rhs))))]
+                ValueF v -> returnRewrites (Expr uid (PlusF lhs rhs))))
     ValueF v -> returnRewrites (Expr uid (ValueF v))
 
 rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
