@@ -68,60 +68,57 @@ rewrite : Fold (Rewrites Expr)
 rewrite = {selected = rewriteSelected,standard = rewriteStandard}
 
 rewriteSelected : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-rewriteSelected uid exprf = filter ((\l -> length l > 0) . fst) (concatMap (\r -> r uid exprf) [
-    commute,assocl,assocr,zerol,zeror])
+rewriteSelected uid exprf = bindRewrites (rewriteStandard uid exprf) (\expr ->
+    concatMap (\r -> r expr) [commute,assocl,assocr,zerol,zeror])
 
-commute : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-commute uid exprf = case exprf of
-    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> singleRewrites "commute" (plus uid rhs lhs)))
-    ZeroF -> returnRewrites (zero uid)
-    VariableF name -> returnRewrites (variable uid name)
+commute : Expr -> Rewrites Expr
+commute expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> singleRewrites "commute" (plus uid rhs lhs)
+        _ -> []
 
-assocl : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-assocl uid exprf = case exprf of
-    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> case rhs of
-            Expr rhsuid rhsexprf -> case rhsexprf of
-                PlusF rlhs rrhs -> singleRewrites "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
-                _ -> returnRewrites (plus uid lhs rhs)))
-    ZeroF -> returnRewrites (zero uid)
-    VariableF name -> returnRewrites (variable uid name)
+assocl : Expr -> Rewrites Expr
+assocl expr = case expr of
+    Expr uid exprf ->
+        case exprf of
+            PlusF lhs rhs -> case rhs of
+                Expr rhsuid rhsexprf -> case rhsexprf of
+                    PlusF rlhs rrhs -> singleRewrites "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
+                    _ -> []
+            _ -> []
 
-assocr : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-assocr uid exprf = case exprf of
-    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> case lhs of
-            Expr lhsuid lhsexprf -> case lhsexprf of
-                PlusF llhs lrhs -> singleRewrites "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
-                _ -> returnRewrites (plus uid lhs rhs)))
-    ZeroF -> returnRewrites (zero uid)
-    VariableF name -> returnRewrites (variable uid name)
+assocr : Expr -> Rewrites Expr
+assocr expr = case expr of
+    Expr uid exprf ->
+        case exprf of
+            PlusF lhs rhs -> case lhs of
+                Expr lhsuid lhsexprf -> case lhsexprf of
+                    PlusF llhs lrhs -> singleRewrites "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
+                    _ -> []
+            _ -> []
 
-zerol : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-zerol uid exprf = case exprf of
-    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> case lhs of
-            Expr lhsuid lhsexprf -> case lhsexprf of
+zerol : Expr -> Rewrites Expr
+zerol expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case lhs of
+            Expr _ lhsexprf -> case lhsexprf of
                 ZeroF -> singleRewrites "zerol" rhs
-                _ -> returnRewrites (plus uid lhs rhs)))
-    ZeroF -> returnRewrites (zero uid)
-    VariableF name -> returnRewrites (variable uid name)
+                _ -> []
+        _ -> []
 
-zeror : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-zeror uid exprf = case exprf of
-    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> case rhs of
-            Expr rhsuid rhsexprf -> case rhsexprf of
+zeror : Expr -> Rewrites Expr
+zeror expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case rhs of
+            Expr _ rhsexprf -> case rhsexprf of
                 ZeroF -> singleRewrites "zeror" lhs
-                _ -> returnRewrites (plus uid lhs rhs)))
-    ZeroF -> returnRewrites (zero uid)
-    VariableF name -> returnRewrites (variable uid name)
+                _ -> []
+        _ -> []
 
 rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
 rewriteStandard uid exprf = case exprf of
     PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> returnRewrites (Expr uid (PlusF lhs rhs))))
+        bindRewrites rhsRewrites (\rhs -> returnRewrites (plus uid lhs rhs)))
     ZeroF -> returnRewrites (zero uid)
     VariableF name -> returnRewrites (variable uid name)
 
