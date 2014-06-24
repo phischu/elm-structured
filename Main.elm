@@ -393,12 +393,30 @@ multiplyvalues expr = case expr of
                 _ -> noRewrite
         _ -> noRewrite
 
+cancelzerol : Expr -> Rewrite Expr
+cancelzerol expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case lhs of
+            Expr _ lhsexprf -> case lhsexprf of
+                ValueF 0 -> singleRewrite "cancel zero left" (zero uid)
+                _ -> noRewrite
+        _ -> noRewrite
+
+cancelzeror : Expr -> Rewrite Expr
+cancelzeror expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case rhs of
+            Expr _ rhsexprf -> case rhsexprf of
+                ValueF 0 -> singleRewrite "cancel zero right" (zero uid)
+                _ -> noRewrite
+        _ -> noRewrite
 
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
     factoroutl,factoroutr,distributel,distributer,
     zerolplus,zerorplus,
     oneltimes,onertimes,
+    cancelzerol,cancelzeror,
     splitoneleft,splitoneright,
     addvalues,multiplyvalues,
     commuteplus,assoclplus,assocrplus,
