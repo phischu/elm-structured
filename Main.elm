@@ -140,7 +140,8 @@ zerol expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case lhs of
             Expr _ lhsexprf -> case lhsexprf of
-                ZeroF -> singleRewrite "zerol" rhs
+                ZeroF -> case rhs of
+                    Expr _ rhsexprf -> singleRewrite "zerol" (Expr uid rhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -149,21 +150,24 @@ zeror expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case rhs of
             Expr _ rhsexprf -> case rhsexprf of
-                ZeroF -> singleRewrite "zeror" lhs
+                ZeroF -> case lhs of
+                    Expr _ lhsexprf -> singleRewrite "zeror" (Expr uid lhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
 
 addzerol : Expr -> Rewrite Expr
-addzerol expr =
-    bindRewrite newuid (\plusuid ->
-        bindRewrite newuid (\zerouid ->
-            singleRewrite "addzerol" (plus plusuid (zero zerouid) expr)))
+addzerol expr = case expr of
+    Expr uid exprf ->
+        bindRewrite newuid (\luid ->
+            bindRewrite newuid (\ruid ->
+                singleRewrite "addzerol" (plus uid (zero luid) (Expr ruid exprf))))
 
 addzeror : Expr -> Rewrite Expr
-addzeror expr =
-    bindRewrite newuid (\plusuid ->
-        bindRewrite newuid (\zerouid ->
-            singleRewrite "addzeror" (plus plusuid expr (zero zerouid))))
+addzeror expr = case expr of
+    Expr uid exprf ->
+        bindRewrite newuid (\luid ->
+            bindRewrite newuid (\ruid ->
+                singleRewrite "addzeror" (plus uid (Expr ruid exprf) (zero luid))))
 
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [commute,assocl,assocr,zerol,zeror,addzerol,addzeror]
