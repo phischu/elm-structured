@@ -58,7 +58,9 @@ rewrite uid exprf state =
         else rewriteStandard uid exprf state
 
 rewriteSelected : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
-rewriteSelected uid exprf = bindRewrite (rewriteStandard uid exprf) (\expr -> commute expr)
+rewriteSelected uid exprf = bindRewrite (rewriteStandard uid exprf) (\expr ->
+    manyRewrites (map (\r -> r expr) [
+        commute,assocl,assocr,zerol,zeror]))
 
 commute : Expr -> Rewrite Expr
 commute expr = case expr of
@@ -121,6 +123,9 @@ singleRewrite n a s = [(s,([n],a))]
 noRewrite : Rewrite a
 noRewrite s = []
 
+manyRewrites : [Rewrite a] -> Rewrite a
+manyRewrites = foldr (\r1 r2 s -> r1 s ++ r2 s) noRewrite
+
 returnRewrite : a -> Rewrite a
 returnRewrite a s = [(s,([],a))]
 
@@ -147,4 +152,6 @@ renderRewrite : (State,(RewriteName,Expr)) -> Element
 renderRewrite (state,(name,expr)) = keyword (show name)
     |> clickable inputexpr.handle {state | expr <- expr}
 
-main = lift (\state -> traverse render state.expr state) inputexpr.signal
+main = lift (\state ->
+    traverse render state.expr state `beside`
+    renderRewrites state (traverse rewrite state.expr)) inputexpr.signal
