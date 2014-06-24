@@ -1,4 +1,4 @@
-import Graphics.Input (Input,input,clickable)
+import Graphics.Input (Input,input,clickable,hoverable)
 import Text (leftAligned,toText)
 import Text as Text
 
@@ -20,6 +20,9 @@ traverse f expr = case expr of
 
 inputexpr : Input State
 inputexpr = input {nextuid=8,selecteduid=1,expr=testexpr,history=[],goal=goalexpr}
+
+hoverinput : Input UID
+hoverinput = input (-1)
 
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
@@ -50,11 +53,14 @@ goalexpr = times 0 (value 1 2) (variable 3 "x")
 
 type Render = State -> Element
 
-render : UID -> ExprF Render -> Render
-render uid exprf state =
-    (if uid == state.selecteduid then color lightYellow else id) (
-        clickable inputexpr.handle {state | selecteduid <- uid} (
-            renderExprF 80 (applyState state exprf)))
+render : UID -> UID -> ExprF Render -> Render
+render hovereduid uid exprf state = exprf
+    |> applyState state
+    |> renderExprF (\s -> keyword 80 s
+        |> clickable inputexpr.handle {state | selecteduid <- uid}
+        |> hoverable hoverinput.handle (\b -> if b then uid else -1))
+    |> (if uid == hovereduid then color lightRed else id)
+    |> (if uid == state.selecteduid then color lightYellow else id)
 
 applyState : State -> ExprF Render -> ExprF Element
 applyState state exprf =
@@ -66,29 +72,29 @@ applyState state exprf =
         VariableF name -> VariableF name
 
 renderHistory : [Expr] -> Element
-renderHistory = flow down . map (traverse (\_ -> renderExprF 30))
+renderHistory = flow down . map (traverse (\_ -> renderExprF (keyword 30)))
 
-renderExprF : Float -> ExprF Element -> Element
-renderExprF h exprf = case exprf of
+renderExprF : (String -> Element) -> ExprF Element -> Element
+renderExprF r exprf = case exprf of
     PlusF lhs rhs -> flow right [
-        keyword h "(",
+        r "(",
         lhs,
-        keyword h "+",
+        r "+",
         rhs,
-        keyword h ")"]
+        r ")"]
     TimesF lhs rhs -> flow right [
-        keyword h "(",
+        r "(",
         lhs,
-        keyword h "*",
+        r "*",
         rhs,
-        keyword h ")"]
+        r ")"]
     NegateF e -> flow right [
-        keyword h "(",
-        keyword h "-",
+        r "(",
+        r "-",
         e,
-        keyword h ")"]
-    ValueF i -> keyword h (show i)
-    VariableF name -> keyword h name
+        r ")"]
+    ValueF i -> r (show i)
+    VariableF name -> r name
 
 renderRewrites : State -> Rewrite Expr -> Element
 renderRewrites state rs = flow down (map renderRewrite (rs state))
@@ -469,12 +475,12 @@ allRewrites = [
     addoneltimes,addonertimes]
 
 
-main = lift (\state -> let
-        renderedExpr = traverse render state.expr state
+main = lift2 (\state hovereduid -> let
+        renderedExpr = traverse (render hovereduid) state.expr state
         renderedHistory = renderHistory state.history
         renderedRewrites = renderRewrites state (traverse rewrite state.expr)
-        renderedGoal = keyword 30 "Goal: " `beside` traverse (\_ -> renderExprF 30) state.goal
+        renderedGoal = keyword 30 "Goal: " `beside` traverse (\_ -> renderExprF (keyword 30)) state.goal
             |> color lightGreen
             |> container 400 60 midLeft
     in
-        renderedRewrites `beside` flow down [renderedGoal,renderedExpr,renderedHistory]) inputexpr.signal
+        renderedRewrites `beside` flow down [renderedGoal,renderedExpr,renderedHistory]) inputexpr.signal hoverinput.signal
