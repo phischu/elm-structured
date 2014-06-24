@@ -386,7 +386,9 @@ multiplyvalues expr = case expr of
             Expr lhsuid lhsexprf -> case lhsexprf of
                 ValueF lhsi -> case rhs of
                     Expr rhsuid rhsexprf -> case rhsexprf of
-                        ValueF rhsi -> singleRewrite "multiply values" (value uid (lhsi * rhsi))
+                        ValueF rhsi -> if lhsi > 1 && rhsi > 1
+                            then singleRewrite "multiply values" (value uid (lhsi * rhsi))
+                            else noRewrite
                         _ -> noRewrite
                 _ -> noRewrite
         _ -> noRewrite
