@@ -47,94 +47,104 @@ render uid exprf state =
 
 keyword : String -> Element
 keyword s = leftAligned (toText s)
-{-
-type Rewrites a = UID -> (UID,[Rewrite a])
-type Rewrite a = ([String],a)
 
-rewrite : Fold (Rewrites Expr)
-rewrite = {selected = rewriteSelected,standard = rewriteStandard}
 
-rewriteSelected : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
-rewriteSelected uid exprf = bindRewrites (rewriteStandard uid exprf) (\expr ->
-    concatMap (\r -> r expr) [commute,assocl,assocr,zerol,zeror])
 
-commute : Expr -> Rewrites Expr
+
+rewrite : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
+rewrite uid exprf state =
+    if uid == state.selecteduid
+        then rewriteSelected uid exprf state
+        else rewriteStandard uid exprf state
+
+rewriteSelected : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
+rewriteSelected uid exprf = bindRewrite (rewriteStandard uid exprf) (\expr -> commute expr)
+
+commute : Expr -> Rewrite Expr
 commute expr = case expr of
     Expr uid exprf -> case exprf of
-        PlusF lhs rhs -> singleRewrites "commute" (plus uid rhs lhs)
-        _ -> []
+        PlusF lhs rhs -> singleRewrite "commute" (plus uid rhs lhs)
+        _ -> noRewrite
 
-assocl : Expr -> Rewrites Expr
+assocl : Expr -> Rewrite Expr
 assocl expr = case expr of
     Expr uid exprf ->
         case exprf of
             PlusF lhs rhs -> case rhs of
                 Expr rhsuid rhsexprf -> case rhsexprf of
-                    PlusF rlhs rrhs -> singleRewrites "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
-                    _ -> []
-            _ -> []
+                    PlusF rlhs rrhs -> singleRewrite "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
+                    _ -> noRewrite
+            _ -> noRewrite
 
-assocr : Expr -> Rewrites Expr
+assocr : Expr -> Rewrite Expr
 assocr expr = case expr of
     Expr uid exprf ->
         case exprf of
             PlusF lhs rhs -> case lhs of
                 Expr lhsuid lhsexprf -> case lhsexprf of
-                    PlusF llhs lrhs -> singleRewrites "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
-                    _ -> []
-            _ -> []
+                    PlusF llhs lrhs -> singleRewrite "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
+                    _ -> noRewrite
+            _ -> noRewrite
 
-zerol : Expr -> Rewrites Expr
+zerol : Expr -> Rewrite Expr
 zerol expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case lhs of
             Expr _ lhsexprf -> case lhsexprf of
-                ZeroF -> singleRewrites "zerol" rhs
-                _ -> []
-        _ -> []
+                ZeroF -> singleRewrite "zerol" rhs
+                _ -> noRewrite
+        _ -> noRewrite
 
-zeror : Expr -> Rewrites Expr
+zeror : Expr -> Rewrite Expr
 zeror expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case rhs of
             Expr _ rhsexprf -> case rhsexprf of
-                ZeroF -> singleRewrites "zeror" lhs
-                _ -> []
-        _ -> []
+                ZeroF -> singleRewrite "zeror" lhs
+                _ -> noRewrite
+        _ -> noRewrite
 
-rewriteStandard : UID -> ExprF (Rewrites Expr) -> Rewrites Expr
+rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
 rewriteStandard uid exprf = case exprf of
-    PlusF lhsRewrites rhsRewrites -> bindRewrites lhsRewrites (\lhs ->
-        bindRewrites rhsRewrites (\rhs -> returnRewrites (plus uid lhs rhs)))
-    ZeroF -> returnRewrites (zero uid)
-    VariableF name -> returnRewrites (variable uid name)
+    PlusF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
+        bindRewrite rhsRewrite (\rhs -> returnRewrite (plus uid lhs rhs)))
+    ZeroF -> returnRewrite (zero uid)
+    VariableF name -> returnRewrite (variable uid name)
 
-singleRewrites : String -> a -> Rewrites a
-singleRewrites s a uid = (uid,[([s],a)])
 
-returnRewrites : a -> Rewrites a
-returnRewrites a uid = (uid,[([],a)])
+type RewriteName = [String]
+type Rewrite a = State -> [(State,(RewriteName,a))]
 
-mapRewrites : (a -> b) -> Rewrites a -> Rewrites b
-mapRewrites f urs uid = case urs uid of
-    (newuid,rs) -> (newuid,map (\(n,a) -> (n,f a)) rs)
+singleRewrite : String -> a -> Rewrite a
+singleRewrite n a s = [(s,([n],a))]
 
-joinRewrites : Rewrites (Rewrites a) -> Rewrites a
-joinRewrites urrs uid = case urrs uid of
-    (newuid,rurs) -> go newuid rurs
+noRewrite : Rewrite a
+noRewrite s = []
 
-go : UID -> [([String],UID ->(UID,[([String],s)]))] -> (UID,[([String],a)])
-go uid rus = case rus of
-    [] -> (uid,[])
+returnRewrite : a -> Rewrite a
+returnRewrite a s = [(s,([],a))]
 
-bindRewrites : Rewrites a -> (a -> Rewrites b) -> Rewrites b
-bindRewrites r f = joinRewrites (mapRewrites f r)
+mapRewrite : (a -> b) -> Rewrite a -> Rewrite b
+mapRewrite f smna s = mapRewrite' f (smna s)
 
-renderRewrites : State -> Rewrites Expr -> Element
-renderRewrites state rs = flow down . map (renderRewrite state)
+mapRewrite' : (a -> b) -> [(State,(RewriteName,a))] -> [(State,(RewriteName,b))]
+mapRewrite' f lsna = case lsna of
+    [] -> []
+    (s',(n,a)) :: rest -> (s',(n,f a)) :: mapRewrite' f rest
 
-renderRewrite : State -> Rewrite Expr -> Element
-renderRewrite state (name,expr) = keyword (show name)
-    |> clickable inputexpr.handle {selecteduid = selecteduid,expr = expr}
--}
+bindRewrite : Rewrite a -> (a -> Rewrite b) -> Rewrite b
+bindRewrite smna amsnb s = bindRewrite' (smna s) amsnb
+
+bindRewrite' : [(State,(RewriteName,a))] -> (a -> Rewrite b) -> [(State,(RewriteName,b))]
+bindRewrite' snas f = case snas of
+    [] -> []
+    ((s,(n,a)) :: rest) -> map (\(s',(n',b)) -> (s',(n++n',b))) (f a s) ++ bindRewrite' rest f
+
+renderRewrites : State -> Rewrite Expr -> Element
+renderRewrites state rs = flow down (map renderRewrite (rs state))
+
+renderRewrite : (State,(RewriteName,Expr)) -> Element
+renderRewrite (state,(name,expr)) = keyword (show name)
+    |> clickable inputexpr.handle {state | expr <- expr}
+
 main = lift (\state -> traverse render state.expr state) inputexpr.signal
