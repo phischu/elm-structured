@@ -3,28 +3,19 @@ import Graphics.Input (Input,input,clickable)
 type UID = Int
 data ExprF a = PlusF a a | ZeroF | VariableF String
 data Expr = Expr UID (ExprF Expr)
-type SelectedExpr = {selecteduid : UID,expr : Expr}
+type State = {nextuid : UID,selecteduid : UID,expr : Expr}
 
-type Fold a = {
-    selected : UID -> ExprF a -> a,
-    standard : UID -> ExprF a -> a}
-
-runFold : Fold a -> SelectedExpr -> a
-runFold fold {selecteduid,expr} = case expr of
+traverse : (UID -> ExprF a -> a) -> Expr -> a
+traverse f expr = case expr of
     Expr uid exprf ->
-        (if selecteduid == uid then fold.selected uid else fold.standard uid) (
+        f uid (
             case exprf of
-                PlusF lhs rhs ->
-                    PlusF
-                        (runFold fold {selecteduid = selecteduid,expr = lhs})
-                        (runFold fold {selecteduid = selecteduid,expr = rhs})
-                ZeroF ->
-                    ZeroF
-                VariableF name ->
-                    VariableF name)
+                PlusF lhs rhs -> PlusF (traverse f lhs) (traverse f rhs)
+                ZeroF -> ZeroF
+                VariableF name -> VariableF name)
 
-inputexpr : Input SelectedExpr
-inputexpr = input {selecteduid=1,expr=testexpr}
+inputexpr : Input State
+inputexpr = input {nextuid=5,selecteduid=1,expr=testexpr}
 
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
@@ -38,30 +29,26 @@ variable uid name = Expr uid (VariableF name)
 testexpr : Expr
 testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (zero 4)
 
-render : SelectedExpr -> Fold Element
-render sexpr = {selected = renderSelected sexpr,standard = renderStandard sexpr}
+type Render = State -> Element
 
-renderSelected : SelectedExpr -> UID -> ExprF Element -> Element
-renderSelected original uid exprf = color lightYellow (renderStandard original uid exprf)
-
-renderStandard : SelectedExpr -> UID -> ExprF Element -> Element
-renderStandard original uid exprf = case exprf of
-    PlusF lhs rhs -> flow right [
-        keyword "(",
-        lhs,
-        keyword "+",
-        rhs,
-        keyword ")"]
-        |> clickable inputexpr.handle {selecteduid=uid,expr=original.expr}
-    ZeroF -> leftAligned (toText "0")
-        |> clickable inputexpr.handle {selecteduid=uid,expr=original.expr}
-    VariableF name -> keyword name
-        |> clickable inputexpr.handle {selecteduid=uid,expr=original.expr}
+render : UID -> ExprF Render -> Render
+render uid exprf state =
+    (if uid == state.selecteduid then color lightYellow else id) (
+        clickable inputexpr.handle {state | selecteduid <- uid} (
+            case exprf of
+                PlusF lhs rhs -> flow right [
+                    keyword "(",
+                    lhs state,
+                    keyword "+",
+                    rhs state,
+                    keyword ")"]
+                ZeroF -> leftAligned (toText "0")
+                VariableF name -> keyword name))
 
 keyword : String -> Element
 keyword s = leftAligned (toText s)
-
-type Rewrites a = [Rewrite a]
+{-
+type Rewrites a = UID -> (UID,[Rewrite a])
 type Rewrite a = ([String],a)
 
 rewrite : Fold (Rewrites Expr)
@@ -123,27 +110,31 @@ rewriteStandard uid exprf = case exprf of
     VariableF name -> returnRewrites (variable uid name)
 
 singleRewrites : String -> a -> Rewrites a
-singleRewrites s a = [([s],a)]
+singleRewrites s a uid = (uid,[([s],a)])
 
 returnRewrites : a -> Rewrites a
-returnRewrites a = [([],a)]
+returnRewrites a uid = (uid,[([],a)])
 
 mapRewrites : (a -> b) -> Rewrites a -> Rewrites b
-mapRewrites f = map (\(n,a) -> (n,f a))
+mapRewrites f urs uid = case urs uid of
+    (newuid,rs) -> (newuid,map (\(n,a) -> (n,f a)) rs)
 
 joinRewrites : Rewrites (Rewrites a) -> Rewrites a
-joinRewrites = concatMap (\(n,r) -> map (\(n',a) -> (n ++ n',a)) r)
+joinRewrites urrs uid = case urrs uid of
+    (newuid,rurs) -> go newuid rurs
+
+go : UID -> [([String],UID ->(UID,[([String],s)]))] -> (UID,[([String],a)])
+go uid rus = case rus of
+    [] -> (uid,[])
 
 bindRewrites : Rewrites a -> (a -> Rewrites b) -> Rewrites b
 bindRewrites r f = joinRewrites (mapRewrites f r)
 
-renderRewrites : UID -> Rewrites Expr -> Element
-renderRewrites selecteduid = flow down . map (renderRewrite selecteduid)
+renderRewrites : State -> Rewrites Expr -> Element
+renderRewrites state rs = flow down . map (renderRewrite state)
 
-renderRewrite : UID -> Rewrite Expr -> Element
-renderRewrite selecteduid (name,expr) = keyword (show name)
+renderRewrite : State -> Rewrite Expr -> Element
+renderRewrite state (name,expr) = keyword (show name)
     |> clickable inputexpr.handle {selecteduid = selecteduid,expr = expr}
-
-main = lift (\sexpr ->
-    runFold (render sexpr) sexpr `beside`
-    renderRewrites sexpr.selecteduid (runFold rewrite sexpr)) inputexpr.signal
+-}
+main = lift (\state -> traverse render state.expr state) inputexpr.signal
