@@ -30,6 +30,9 @@ value uid i = Expr uid (ValueF i)
 zero : UID -> Expr
 zero uid = value uid 0
 
+one : UID -> Expr
+one uid = value uid 1
+
 variable : UID -> String ->Expr
 variable uid name = Expr uid (VariableF name)
 
