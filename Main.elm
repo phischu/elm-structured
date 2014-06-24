@@ -349,8 +349,8 @@ factoroutr expr = case expr of
                 _ -> noRewrite
         _ -> noRewrite
 
-splitOneLeft : Expr -> Rewrite Expr
-splitOneLeft expr = case expr of
+splitoneleft : Expr -> Rewrite Expr
+splitoneleft expr = case expr of
     Expr uid exprf -> case exprf of
         ValueF i -> bindRewrite newuid (\lhsuid ->
             bindRewrite newuid (\rhsuid -> if i > 1
@@ -358,8 +358,8 @@ splitOneLeft expr = case expr of
                 else noRewrite))
         _ -> noRewrite
 
-splitOneRight : Expr -> Rewrite Expr
-splitOneRight expr = case expr of
+splitoneright : Expr -> Rewrite Expr
+splitoneright expr = case expr of
     Expr uid exprf -> case exprf of
         ValueF i -> bindRewrite newuid (\lhsuid ->
             bindRewrite newuid (\rhsuid -> if i > 1
@@ -367,12 +367,26 @@ splitOneRight expr = case expr of
                 else noRewrite))
         _ -> noRewrite
 
+addvalues : Expr -> Rewrite Expr
+addvalues expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                ValueF lhsi -> case rhs of
+                    Expr rhsuid rhsexprf -> case rhsexprf of
+                        ValueF rhsi -> singleRewrite "add values" (value uid (lhsi + rhsi))
+                        _ -> noRewrite
+                _ -> noRewrite
+        _ -> noRewrite
+
+
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
     factoroutl,factoroutr,distributel,distributer,
     zerolplus,zerorplus,
     oneltimes,onertimes,
-    splitOneLeft,splitOneRight,
+    splitoneleft,splitoneright,
+    addvalues,
     commuteplus,assoclplus,assocrplus,
     commutetimes,assocltimes,assocrtimes,
     addzerolplus,addzerorplus,
