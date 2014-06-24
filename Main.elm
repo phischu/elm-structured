@@ -379,6 +379,18 @@ addvalues expr = case expr of
                 _ -> noRewrite
         _ -> noRewrite
 
+multiplyvalues : Expr -> Rewrite Expr
+multiplyvalues expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                ValueF lhsi -> case rhs of
+                    Expr rhsuid rhsexprf -> case rhsexprf of
+                        ValueF rhsi -> singleRewrite "multiply values" (value uid (lhsi * rhsi))
+                        _ -> noRewrite
+                _ -> noRewrite
+        _ -> noRewrite
+
 
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
@@ -386,7 +398,7 @@ allRewrites = [
     zerolplus,zerorplus,
     oneltimes,onertimes,
     splitoneleft,splitoneright,
-    addvalues,
+    addvalues,multiplyvalues,
     commuteplus,assoclplus,assocrplus,
     commutetimes,assocltimes,assocrtimes,
     addzerolplus,addzerorplus,
