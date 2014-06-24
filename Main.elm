@@ -109,14 +109,14 @@ renderRewrite (state,(name,expr)) = keyword (show name)
     |> clickable inputexpr.handle {state | expr <- expr}
 
 
-commute : Expr -> Rewrite Expr
-commute expr = case expr of
+commuteplus : Expr -> Rewrite Expr
+commuteplus expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> singleRewrite "commute" (plus uid rhs lhs)
         _ -> noRewrite
 
-assocl : Expr -> Rewrite Expr
-assocl expr = case expr of
+assoclplus : Expr -> Rewrite Expr
+assoclplus expr = case expr of
     Expr uid exprf ->
         case exprf of
             PlusF lhs rhs -> case rhs of
@@ -125,8 +125,8 @@ assocl expr = case expr of
                     _ -> noRewrite
             _ -> noRewrite
 
-assocr : Expr -> Rewrite Expr
-assocr expr = case expr of
+assocrplus : Expr -> Rewrite Expr
+assocrplus expr = case expr of
     Expr uid exprf ->
         case exprf of
             PlusF lhs rhs -> case lhs of
@@ -135,8 +135,8 @@ assocr expr = case expr of
                     _ -> noRewrite
             _ -> noRewrite
 
-zerol : Expr -> Rewrite Expr
-zerol expr = case expr of
+zerolplus : Expr -> Rewrite Expr
+zerolplus expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case lhs of
             Expr _ lhsexprf -> case lhsexprf of
@@ -145,8 +145,8 @@ zerol expr = case expr of
                 _ -> noRewrite
         _ -> noRewrite
 
-zeror : Expr -> Rewrite Expr
-zeror expr = case expr of
+zerorplus : Expr -> Rewrite Expr
+zerorplus expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case rhs of
             Expr _ rhsexprf -> case rhsexprf of
@@ -155,22 +155,24 @@ zeror expr = case expr of
                 _ -> noRewrite
         _ -> noRewrite
 
-addzerol : Expr -> Rewrite Expr
-addzerol expr = case expr of
+addzerolplus : Expr -> Rewrite Expr
+addzerolplus expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
                 singleRewrite "addzerol" (plus uid (zero luid) (Expr ruid exprf))))
 
-addzeror : Expr -> Rewrite Expr
-addzeror expr = case expr of
+addzerorplus : Expr -> Rewrite Expr
+addzerorplus expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
                 singleRewrite "addzeror" (plus uid (Expr ruid exprf) (zero luid))))
 
 allRewrites : [Expr -> Rewrite Expr]
-allRewrites = [commute,assocl,assocr,zerol,zeror,addzerol,addzeror]
+allRewrites = [
+    commuteplus,assoclplus,assocrplus,
+    zerolplus,zerorplus,addzerolplus,addzerorplus]
 
 
 main = lift (\state ->
