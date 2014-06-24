@@ -1,7 +1,7 @@
 import Graphics.Input (Input,input,clickable)
 
 type UID = Int
-data ExprF a = PlusF a a | ZeroF | VariableF String
+data ExprF a = PlusF a a | TimesF a a | ZeroF | VariableF String
 data Expr = Expr UID (ExprF Expr)
 type State = {nextuid : UID,selecteduid : UID,expr : Expr}
 
@@ -11,14 +11,18 @@ traverse f expr = case expr of
         f uid (
             case exprf of
                 PlusF lhs rhs -> PlusF (traverse f lhs) (traverse f rhs)
+                TimesF lhs rhs -> TimesF (traverse f lhs) (traverse f rhs)
                 ZeroF -> ZeroF
                 VariableF name -> VariableF name)
 
 inputexpr : Input State
-inputexpr = input {nextuid=5,selecteduid=1,expr=testexpr}
+inputexpr = input {nextuid=7,selecteduid=1,expr=testexpr}
 
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
+
+times : UID -> Expr -> Expr -> Expr
+times uid lhs rhs = Expr uid (TimesF lhs rhs)
 
 zero : UID -> Expr
 zero uid = Expr uid ZeroF
@@ -27,7 +31,7 @@ variable : UID -> String ->Expr
 variable uid name = Expr uid (VariableF name)
 
 testexpr : Expr
-testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (zero 4)
+testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (times 4 (zero 5) (variable 6 "y"))
 
 type Render = State -> Element
 
@@ -40,6 +44,12 @@ render uid exprf state =
                     keyword "(",
                     lhs state,
                     keyword "+",
+                    rhs state,
+                    keyword ")"]
+                TimesF lhs rhs -> flow right [
+                    keyword "(",
+                    lhs state,
+                    keyword "*",
                     rhs state,
                     keyword ")"]
                 ZeroF -> leftAligned (toText "0")
@@ -66,6 +76,8 @@ rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
 rewriteStandard uid exprf = case exprf of
     PlusF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
         bindRewrite rhsRewrite (\rhs -> returnRewrite (plus uid lhs rhs)))
+    TimesF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
+        bindRewrite rhsRewrite (\rhs -> returnRewrite (times uid lhs rhs)))
     ZeroF -> returnRewrite (zero uid)
     VariableF name -> returnRewrite (variable uid name)
 
