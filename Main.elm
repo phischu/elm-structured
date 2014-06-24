@@ -60,8 +60,7 @@ rewrite uid exprf state =
 
 rewriteSelected : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
 rewriteSelected uid exprf = bindRewrite (rewriteStandard uid exprf) (\expr ->
-    manyRewrites (map (\r -> r expr) [
-        commute,assocl,assocr,zerol,zeror]))
+    manyRewrites (map (\r -> r expr) allRewrites))
 
 rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
 rewriteStandard uid exprf = case exprf of
@@ -153,6 +152,22 @@ zeror expr = case expr of
                 ZeroF -> singleRewrite "zeror" lhs
                 _ -> noRewrite
         _ -> noRewrite
+
+addzerol : Expr -> Rewrite Expr
+addzerol expr =
+    bindRewrite newuid (\plusuid ->
+        bindRewrite newuid (\zerouid ->
+            singleRewrite "addzerol" (plus plusuid (zero zerouid) expr)))
+
+addzeror : Expr -> Rewrite Expr
+addzeror expr =
+    bindRewrite newuid (\plusuid ->
+        bindRewrite newuid (\zerouid ->
+            singleRewrite "addzeror" (plus plusuid expr (zero zerouid))))
+
+allRewrites : [Expr -> Rewrite Expr]
+allRewrites = [commute,assocl,assocr,zerol,zeror,addzerol,addzeror]
+
 
 main = lift (\state ->
     traverse render state.expr state `beside`
