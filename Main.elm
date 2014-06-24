@@ -3,7 +3,7 @@ import Graphics.Input (Input,input,clickable)
 type UID = Int
 data ExprF a = PlusF a a | TimesF a a | ValueF Int | VariableF String
 data Expr = Expr UID (ExprF Expr)
-type State = {nextuid : UID,selecteduid : UID,expr : Expr}
+type State = {nextuid : UID,selecteduid : UID,expr : Expr,history : [Expr]}
 
 traverse : (UID -> ExprF a -> a) -> Expr -> a
 traverse f expr = case expr of
@@ -16,7 +16,7 @@ traverse f expr = case expr of
                 VariableF name -> VariableF name)
 
 inputexpr : Input State
-inputexpr = input {nextuid=7,selecteduid=1,expr=testexpr}
+inputexpr = input {nextuid=7,selecteduid=1,expr=testexpr,history=[]}
 
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
@@ -45,21 +45,35 @@ render : UID -> ExprF Render -> Render
 render uid exprf state =
     (if uid == state.selecteduid then color lightYellow else id) (
         clickable inputexpr.handle {state | selecteduid <- uid} (
-            case exprf of
-                PlusF lhs rhs -> flow right [
-                    keyword "(",
-                    lhs state,
-                    keyword "+",
-                    rhs state,
-                    keyword ")"]
-                TimesF lhs rhs -> flow right [
-                    keyword "(",
-                    lhs state,
-                    keyword "*",
-                    rhs state,
-                    keyword ")"]
-                ValueF i -> leftAligned (toText (show i))
-                VariableF name -> keyword name))
+            renderExprF (applyState state exprf)))
+
+applyState : State -> ExprF Render -> ExprF Element
+applyState state exprf =
+    case exprf of
+        PlusF lhs rhs -> PlusF (lhs state) (rhs state)
+        TimesF lhs rhs -> TimesF (lhs state) (rhs state)
+        ValueF i -> ValueF i
+        VariableF name -> VariableF name
+
+renderHistory : [Expr] -> Element
+renderHistory = flow down . map (traverse (\_ -> renderExprF))
+
+renderExprF : ExprF Element -> Element
+renderExprF exprf = case exprf of
+    PlusF lhs rhs -> flow right [
+        keyword "(",
+        lhs,
+        keyword "+",
+        rhs,
+        keyword ")"]
+    TimesF lhs rhs -> flow right [
+        keyword "(",
+        lhs,
+        keyword "*",
+        rhs,
+        keyword ")"]
+    ValueF i -> leftAligned (toText (show i))
+    VariableF name -> keyword name
 
 keyword : String -> Element
 keyword s = leftAligned (toText s)
@@ -124,7 +138,7 @@ renderRewrites state rs = flow down (map renderRewrite (rs state))
 
 renderRewrite : (State,(RewriteName,Expr)) -> Element
 renderRewrite (state,(name,expr)) = keyword (show name)
-    |> clickable inputexpr.handle {state | expr <- expr}
+    |> clickable inputexpr.handle {state | expr <- expr, history <- state.expr :: state.history}
 
 
 equalModuloUIDs : Expr -> Expr -> Bool
@@ -340,5 +354,5 @@ allRewrites = [
 
 
 main = lift (\state ->
-    traverse render state.expr state `beside`
+    (traverse render state.expr state `above` renderHistory state.history)`beside`
     renderRewrites state (traverse rewrite state.expr)) inputexpr.signal
