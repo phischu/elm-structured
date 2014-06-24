@@ -1,7 +1,7 @@
 import Graphics.Input (Input,input,clickable)
 
 type UID = Int
-data ExprF a = PlusF a a | TimesF a a | ZeroF | VariableF String
+data ExprF a = PlusF a a | TimesF a a | ValueF Int | VariableF String
 data Expr = Expr UID (ExprF Expr)
 type State = {nextuid : UID,selecteduid : UID,expr : Expr}
 
@@ -12,7 +12,7 @@ traverse f expr = case expr of
             case exprf of
                 PlusF lhs rhs -> PlusF (traverse f lhs) (traverse f rhs)
                 TimesF lhs rhs -> TimesF (traverse f lhs) (traverse f rhs)
-                ZeroF -> ZeroF
+                ValueF i -> ValueF i
                 VariableF name -> VariableF name)
 
 inputexpr : Input State
@@ -24,8 +24,11 @@ plus uid lhs rhs = Expr uid (PlusF lhs rhs)
 times : UID -> Expr -> Expr -> Expr
 times uid lhs rhs = Expr uid (TimesF lhs rhs)
 
+value : UID -> Int -> Expr
+value uid i = Expr uid (ValueF i)
+
 zero : UID -> Expr
-zero uid = Expr uid ZeroF
+zero uid = value uid 0
 
 variable : UID -> String ->Expr
 variable uid name = Expr uid (VariableF name)
@@ -52,7 +55,7 @@ render uid exprf state =
                     keyword "*",
                     rhs state,
                     keyword ")"]
-                ZeroF -> leftAligned (toText "0")
+                ValueF i -> leftAligned (toText (show i))
                 VariableF name -> keyword name))
 
 keyword : String -> Element
@@ -78,7 +81,7 @@ rewriteStandard uid exprf = case exprf of
         bindRewrite rhsRewrite (\rhs -> returnRewrite (plus uid lhs rhs)))
     TimesF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
         bindRewrite rhsRewrite (\rhs -> returnRewrite (times uid lhs rhs)))
-    ZeroF -> returnRewrite (zero uid)
+    ValueF i -> returnRewrite (value uid i)
     VariableF name -> returnRewrite (variable uid name)
 
 
@@ -152,7 +155,7 @@ zerolplus expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case lhs of
             Expr _ lhsexprf -> case lhsexprf of
-                ZeroF -> case rhs of
+                ValueF 0 -> case rhs of
                     Expr _ rhsexprf -> singleRewrite "zerol" (Expr uid rhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
@@ -162,7 +165,7 @@ zerorplus expr = case expr of
     Expr uid exprf -> case exprf of
         PlusF lhs rhs -> case rhs of
             Expr _ rhsexprf -> case rhsexprf of
-                ZeroF -> case lhs of
+                ValueF 0 -> case lhs of
                     Expr _ lhsexprf -> singleRewrite "zeror" (Expr uid lhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
