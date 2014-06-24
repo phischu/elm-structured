@@ -5,7 +5,7 @@ import Text as Text
 type UID = Int
 data ExprF a = PlusF a a | TimesF a a | ValueF Int | VariableF String
 data Expr = Expr UID (ExprF Expr)
-type State = {nextuid : UID,selecteduid : UID,expr : Expr,history : [Expr]}
+type State = {nextuid : UID,selecteduid : UID,expr : Expr,history : [Expr],goal : Expr}
 
 traverse : (UID -> ExprF a -> a) -> Expr -> a
 traverse f expr = case expr of
@@ -18,7 +18,7 @@ traverse f expr = case expr of
                 VariableF name -> VariableF name)
 
 inputexpr : Input State
-inputexpr = input {nextuid=7,selecteduid=1,expr=testexpr,history=[]}
+inputexpr = input {nextuid=7,selecteduid=1,expr=testexpr,history=[],goal=goalexpr}
 
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
@@ -40,6 +40,9 @@ variable uid name = Expr uid (VariableF name)
 
 testexpr : Expr
 testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (times 4 (zero 5) (variable 6 "y"))
+
+goalexpr : Expr
+goalexpr = times 0 (value 1 2) (variable 3 "x")
 
 type Render = State -> Element
 
@@ -429,5 +432,8 @@ main = lift (\state -> let
         renderedExpr = traverse render state.expr state
         renderedHistory = renderHistory state.history
         renderedRewrites = renderRewrites state (traverse rewrite state.expr)
+        renderedGoal = keyword 30 "Goal: " `beside` traverse (\_ -> renderExprF 30) state.goal
+            |> color lightGreen
+            |> container 400 60 midLeft
     in
-        renderedRewrites `beside` (renderedExpr `above` renderedHistory)) inputexpr.signal
+        renderedRewrites `beside` flow down [renderedGoal,renderedExpr,renderedHistory]) inputexpr.signal
