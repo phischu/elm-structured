@@ -432,11 +432,34 @@ cancelzeror expr = case expr of
                 _ -> noRewrite
         _ -> noRewrite
 
+cancelnegatedl : Expr -> Rewrite Expr
+cancelnegatedl expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                NegateF e -> if equalModuloUIDs e rhs
+                    then singleRewrite "cancel negated left" (zero uid)
+                    else noRewrite
+                _ -> noRewrite
+        _ -> noRewrite
+
+cancelnegatedr : Expr -> Rewrite Expr
+cancelnegatedr expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case rhs of
+            Expr rhsuid rhsexprf -> case rhsexprf of
+                NegateF e -> if equalModuloUIDs lhs e
+                    then singleRewrite "cancel negated right" (zero uid)
+                    else noRewrite
+                _ -> noRewrite
+        _ -> noRewrite
+
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
     factoroutl,factoroutr,distributel,distributer,
     zerolplus,zerorplus,
     oneltimes,onertimes,
+    cancelnegatedl,cancelnegatedr,
     cancelzerol,cancelzeror,
     splitoneleft,splitoneright,
     addvalues,multiplyvalues,
