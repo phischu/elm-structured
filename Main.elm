@@ -19,7 +19,7 @@ traverse f expr = case expr of
                 VariableF name -> VariableF name)
 
 inputexpr : Input State
-inputexpr = input {nextuid=7,selecteduid=1,expr=testexpr,history=[],goal=goalexpr}
+inputexpr = input {nextuid=8,selecteduid=1,expr=testexpr,history=[],goal=goalexpr}
 
 plus : UID -> Expr -> Expr -> Expr
 plus uid lhs rhs = Expr uid (PlusF lhs rhs)
@@ -374,7 +374,8 @@ splitoneleft expr = case expr of
         ValueF i -> bindRewrite newuid (\lhsuid ->
             bindRewrite newuid (\rhsuid -> if i > 1
                 then singleRewrite "split one left" (plus uid (one lhsuid) (value rhsuid (i-1)))
-                else noRewrite))
+                else bindRewrite newuid (\euid ->
+                    singleRewrite "split one left" (plus uid (one lhsuid) (negate euid (value rhsuid (1-i)))))))
         _ -> noRewrite
 
 splitoneright : Expr -> Rewrite Expr
@@ -383,7 +384,8 @@ splitoneright expr = case expr of
         ValueF i -> bindRewrite newuid (\lhsuid ->
             bindRewrite newuid (\rhsuid -> if i > 1
                 then singleRewrite "split one right" (plus uid (value lhsuid (i-1)) (one rhsuid))
-                else noRewrite))
+                else bindRewrite newuid (\euid ->
+                    singleRewrite "split one right" (plus uid (negate euid (value lhsuid (1-i))) (one rhsuid)))))
         _ -> noRewrite
 
 addvalues : Expr -> Rewrite Expr
