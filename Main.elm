@@ -363,7 +363,7 @@ splitOneRight expr = case expr of
     Expr uid exprf -> case exprf of
         ValueF i -> bindRewrite newuid (\lhsuid ->
             bindRewrite newuid (\rhsuid -> if i > 1
-                then singleRewrite "split one left" (plus uid (value lhsuid (i-1)) (one rhsuid))
+                then singleRewrite "split one right" (plus uid (value lhsuid (i-1)) (one rhsuid))
                 else noRewrite))
         _ -> noRewrite
 
