@@ -185,12 +185,74 @@ addzerorplus expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
-                singleRewrite "addzeror" (plus uid (Expr ruid exprf) (zero luid))))
+                singleRewrite "addzeror" (plus uid (Expr luid exprf) (zero ruid))))
+
+commutetimes : Expr -> Rewrite Expr
+commutetimes expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> singleRewrite "commute" (times uid rhs lhs)
+        _ -> noRewrite
+
+assocltimes : Expr -> Rewrite Expr
+assocltimes expr = case expr of
+    Expr uid exprf ->
+        case exprf of
+            TimesF lhs rhs -> case rhs of
+                Expr rhsuid rhsexprf -> case rhsexprf of
+                    TimesF rlhs rrhs -> singleRewrite "assocl" (times uid (times rhsuid lhs rlhs) rrhs)
+                    _ -> noRewrite
+            _ -> noRewrite
+
+assocrtimes : Expr -> Rewrite Expr
+assocrtimes expr = case expr of
+    Expr uid exprf ->
+        case exprf of
+            TimesF lhs rhs -> case lhs of
+                Expr lhsuid lhsexprf -> case lhsexprf of
+                    TimesF llhs lrhs -> singleRewrite "assocr" (times uid llhs (times lhsuid lrhs rhs))
+                    _ -> noRewrite
+            _ -> noRewrite
+
+oneltimes : Expr -> Rewrite Expr
+oneltimes expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case lhs of
+            Expr _ lhsexprf -> case lhsexprf of
+                ValueF 1 -> case rhs of
+                    Expr _ rhsexprf -> singleRewrite "onel" (Expr uid rhsexprf)
+                _ -> noRewrite
+        _ -> noRewrite
+
+onertimes : Expr -> Rewrite Expr
+onertimes expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case rhs of
+            Expr _ rhsexprf -> case rhsexprf of
+                ValueF 1 -> case lhs of
+                    Expr _ lhsexprf -> singleRewrite "zeror" (Expr uid lhsexprf)
+                _ -> noRewrite
+        _ -> noRewrite
+
+addoneltimes : Expr -> Rewrite Expr
+addoneltimes expr = case expr of
+    Expr uid exprf ->
+        bindRewrite newuid (\luid ->
+            bindRewrite newuid (\ruid ->
+                singleRewrite "addonel" (times uid (one luid) (Expr ruid exprf))))
+
+addonertimes : Expr -> Rewrite Expr
+addonertimes expr = case expr of
+    Expr uid exprf ->
+        bindRewrite newuid (\luid ->
+            bindRewrite newuid (\ruid ->
+                singleRewrite "addoner" (times uid (Expr luid exprf) (one ruid))))
 
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
     commuteplus,assoclplus,assocrplus,
-    zerolplus,zerorplus,addzerolplus,addzerorplus]
+    zerolplus,zerorplus,addzerolplus,addzerorplus,
+    commutetimes,assocltimes,assocrtimes,
+    oneltimes,onertimes,addoneltimes,addonertimes]
 
 
 main = lift (\state ->
