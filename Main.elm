@@ -1,4 +1,6 @@
 import Graphics.Input (Input,input,clickable)
+import Text (leftAligned,toText)
+import Text as Text
 
 type UID = Int
 data ExprF a = PlusF a a | TimesF a a | ValueF Int | VariableF String
@@ -45,7 +47,7 @@ render : UID -> ExprF Render -> Render
 render uid exprf state =
     (if uid == state.selecteduid then color lightYellow else id) (
         clickable inputexpr.handle {state | selecteduid <- uid} (
-            renderExprF (applyState state exprf)))
+            renderExprF 60 (applyState state exprf)))
 
 applyState : State -> ExprF Render -> ExprF Element
 applyState state exprf =
@@ -56,27 +58,37 @@ applyState state exprf =
         VariableF name -> VariableF name
 
 renderHistory : [Expr] -> Element
-renderHistory = flow down . map (traverse (\_ -> renderExprF))
+renderHistory = flow down . map (traverse (\_ -> renderExprF 30))
 
-renderExprF : ExprF Element -> Element
-renderExprF exprf = case exprf of
+renderExprF : Float -> ExprF Element -> Element
+renderExprF h exprf = case exprf of
     PlusF lhs rhs -> flow right [
-        keyword "(",
+        keyword h "(",
         lhs,
-        keyword "+",
+        keyword h "+",
         rhs,
-        keyword ")"]
+        keyword h ")"]
     TimesF lhs rhs -> flow right [
-        keyword "(",
+        keyword h "(",
         lhs,
-        keyword "*",
+        keyword h "*",
         rhs,
-        keyword ")"]
-    ValueF i -> leftAligned (toText (show i))
-    VariableF name -> keyword name
+        keyword h ")"]
+    ValueF i -> keyword h (show i)
+    VariableF name -> keyword h name
 
-keyword : String -> Element
-keyword s = leftAligned (toText s)
+renderRewrites : State -> Rewrite Expr -> Element
+renderRewrites state rs = flow down (map renderRewrite (rs state))
+
+renderRewrite : (State,(RewriteName,Expr)) -> Element
+renderRewrite (state,(name,expr)) = keyword 40 (concat name)
+    |> container 390 90 middle
+    |> color lightBlue
+    |> container 400 100 middle
+    |> clickable inputexpr.handle {state | expr <- expr, history <- state.expr :: state.history}
+
+keyword : Float -> String -> Element
+keyword h s = Text.leftAligned (Text.height h (toText s))
 
 
 type RewriteName = [String]
@@ -133,13 +145,6 @@ bindRewrite' snas f = case snas of
     [] -> []
     ((s,(n,a)) :: rest) -> map (\(s',(n',b)) -> (s',(n++n',b))) (f a s) ++ bindRewrite' rest f
 
-renderRewrites : State -> Rewrite Expr -> Element
-renderRewrites state rs = flow down (map renderRewrite (rs state))
-
-renderRewrite : (State,(RewriteName,Expr)) -> Element
-renderRewrite (state,(name,expr)) = keyword (show name)
-    |> clickable inputexpr.handle {state | expr <- expr, history <- state.expr :: state.history}
-
 
 equalModuloUIDs : Expr -> Expr -> Bool
 equalModuloUIDs expr1 expr2 = case expr1 of
@@ -177,7 +182,7 @@ freshuids expr = case expr of
 commuteplus : Expr -> Rewrite Expr
 commuteplus expr = case expr of
     Expr uid exprf -> case exprf of
-        PlusF lhs rhs -> singleRewrite "commute" (plus uid rhs lhs)
+        PlusF lhs rhs -> singleRewrite "commute plus" (plus uid rhs lhs)
         _ -> noRewrite
 
 assoclplus : Expr -> Rewrite Expr
@@ -186,7 +191,7 @@ assoclplus expr = case expr of
         case exprf of
             PlusF lhs rhs -> case rhs of
                 Expr rhsuid rhsexprf -> case rhsexprf of
-                    PlusF rlhs rrhs -> singleRewrite "assocl" (plus uid (plus rhsuid lhs rlhs) rrhs)
+                    PlusF rlhs rrhs -> singleRewrite "associate plus left" (plus uid (plus rhsuid lhs rlhs) rrhs)
                     _ -> noRewrite
             _ -> noRewrite
 
@@ -196,7 +201,7 @@ assocrplus expr = case expr of
         case exprf of
             PlusF lhs rhs -> case lhs of
                 Expr lhsuid lhsexprf -> case lhsexprf of
-                    PlusF llhs lrhs -> singleRewrite "assocr" (plus uid llhs (plus lhsuid lrhs rhs))
+                    PlusF llhs lrhs -> singleRewrite "associate plus right" (plus uid llhs (plus lhsuid lrhs rhs))
                     _ -> noRewrite
             _ -> noRewrite
 
@@ -206,7 +211,7 @@ zerolplus expr = case expr of
         PlusF lhs rhs -> case lhs of
             Expr _ lhsexprf -> case lhsexprf of
                 ValueF 0 -> case rhs of
-                    Expr _ rhsexprf -> singleRewrite "zerol" (Expr uid rhsexprf)
+                    Expr _ rhsexprf -> singleRewrite "remove zero left" (Expr uid rhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -216,7 +221,7 @@ zerorplus expr = case expr of
         PlusF lhs rhs -> case rhs of
             Expr _ rhsexprf -> case rhsexprf of
                 ValueF 0 -> case lhs of
-                    Expr _ lhsexprf -> singleRewrite "zeror" (Expr uid lhsexprf)
+                    Expr _ lhsexprf -> singleRewrite "remove zero right" (Expr uid lhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -225,19 +230,19 @@ addzerolplus expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
-                singleRewrite "addzerol" (plus uid (zero luid) (Expr ruid exprf))))
+                singleRewrite "plus zero left" (plus uid (zero luid) (Expr ruid exprf))))
 
 addzerorplus : Expr -> Rewrite Expr
 addzerorplus expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
-                singleRewrite "addzeror" (plus uid (Expr luid exprf) (zero ruid))))
+                singleRewrite "plus zero right" (plus uid (Expr luid exprf) (zero ruid))))
 
 commutetimes : Expr -> Rewrite Expr
 commutetimes expr = case expr of
     Expr uid exprf -> case exprf of
-        TimesF lhs rhs -> singleRewrite "commute" (times uid rhs lhs)
+        TimesF lhs rhs -> singleRewrite "commute times" (times uid rhs lhs)
         _ -> noRewrite
 
 assocltimes : Expr -> Rewrite Expr
@@ -246,7 +251,7 @@ assocltimes expr = case expr of
         case exprf of
             TimesF lhs rhs -> case rhs of
                 Expr rhsuid rhsexprf -> case rhsexprf of
-                    TimesF rlhs rrhs -> singleRewrite "assocl" (times uid (times rhsuid lhs rlhs) rrhs)
+                    TimesF rlhs rrhs -> singleRewrite "associate times left" (times uid (times rhsuid lhs rlhs) rrhs)
                     _ -> noRewrite
             _ -> noRewrite
 
@@ -256,7 +261,7 @@ assocrtimes expr = case expr of
         case exprf of
             TimesF lhs rhs -> case lhs of
                 Expr lhsuid lhsexprf -> case lhsexprf of
-                    TimesF llhs lrhs -> singleRewrite "assocr" (times uid llhs (times lhsuid lrhs rhs))
+                    TimesF llhs lrhs -> singleRewrite "associate times right" (times uid llhs (times lhsuid lrhs rhs))
                     _ -> noRewrite
             _ -> noRewrite
 
@@ -266,7 +271,7 @@ oneltimes expr = case expr of
         TimesF lhs rhs -> case lhs of
             Expr _ lhsexprf -> case lhsexprf of
                 ValueF 1 -> case rhs of
-                    Expr _ rhsexprf -> singleRewrite "onel" (Expr uid rhsexprf)
+                    Expr _ rhsexprf -> singleRewrite "remove one left" (Expr uid rhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -276,7 +281,7 @@ onertimes expr = case expr of
         TimesF lhs rhs -> case rhs of
             Expr _ rhsexprf -> case rhsexprf of
                 ValueF 1 -> case lhs of
-                    Expr _ lhsexprf -> singleRewrite "zeror" (Expr uid lhsexprf)
+                    Expr _ lhsexprf -> singleRewrite "remove one right" (Expr uid lhsexprf)
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -285,14 +290,14 @@ addoneltimes expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
-                singleRewrite "addonel" (times uid (one luid) (Expr ruid exprf))))
+                singleRewrite "times one left" (times uid (one luid) (Expr ruid exprf))))
 
 addonertimes : Expr -> Rewrite Expr
 addonertimes expr = case expr of
     Expr uid exprf ->
         bindRewrite newuid (\luid ->
             bindRewrite newuid (\ruid ->
-                singleRewrite "addoner" (times uid (Expr luid exprf) (one ruid))))
+                singleRewrite "times one right" (times uid (Expr luid exprf) (one ruid))))
 
 distributel : Expr -> Rewrite Expr
 distributel expr = case expr of
@@ -301,7 +306,7 @@ distributel expr = case expr of
             Expr rhsuid rhsexprf -> case rhsexprf of
                 PlusF rlhs rrhs -> bindRewrite newuid (\lhsuid ->
                     bindRewrite (freshuids lhs) (\freshlhs ->
-                        singleRewrite "distributel" (plus uid (times lhsuid freshlhs rlhs) (times rhsuid lhs rrhs))))
+                        singleRewrite "distribute left" (plus uid (times lhsuid freshlhs rlhs) (times rhsuid lhs rrhs))))
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -312,7 +317,7 @@ distributer expr = case expr of
             Expr lhsuid lhsexprf -> case lhsexprf of
                 PlusF llhs lrhs -> bindRewrite newuid (\rhsuid ->
                     bindRewrite (freshuids rhs) (\freshrhs ->
-                        singleRewrite "distributer" (plus uid (times lhsuid llhs freshrhs) (times rhsuid lrhs rhs))))
+                        singleRewrite "distribute right" (plus uid (times lhsuid llhs freshrhs) (times rhsuid lrhs rhs))))
                 _ -> noRewrite
         _ -> noRewrite
 
@@ -324,7 +329,7 @@ factoroutl expr = case expr of
                 TimesF llhs lrhs -> case rhs of
                     Expr rhsuid rhsexprf -> case rhsexprf of
                         TimesF rlhs rrhs -> if equalModuloUIDs llhs rlhs
-                            then singleRewrite "factoroutl" (times uid llhs (plus lhsuid lrhs rrhs))
+                            then singleRewrite "factor out left" (times uid llhs (plus lhsuid lrhs rrhs))
                             else noRewrite
                         _ -> noRewrite
                 _ -> noRewrite
@@ -338,7 +343,7 @@ factoroutr expr = case expr of
                 TimesF llhs lrhs -> case rhs of
                     Expr rhsuid rhsexprf -> case rhsexprf of
                         TimesF rlhs rrhs -> if equalModuloUIDs lrhs rrhs
-                            then singleRewrite "factoroutr" (times uid (plus lhsuid llhs rlhs) lrhs)
+                            then singleRewrite "factor out right" (times uid (plus lhsuid llhs rlhs) lrhs)
                             else noRewrite
                         _ -> noRewrite
                 _ -> noRewrite
@@ -346,13 +351,18 @@ factoroutr expr = case expr of
 
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
+    factoroutl,factoroutr,distributel,distributer,
+    zerolplus,zerorplus,
+    oneltimes,onertimes,
     commuteplus,assoclplus,assocrplus,
-    zerolplus,zerorplus,addzerolplus,addzerorplus,
     commutetimes,assocltimes,assocrtimes,
-    oneltimes,onertimes,addoneltimes,addonertimes,
-    distributel,distributer,factoroutl,factoroutr]
+    addzerolplus,addzerorplus,
+    addoneltimes,addonertimes]
 
 
-main = lift (\state ->
-    (traverse render state.expr state `above` renderHistory state.history)`beside`
-    renderRewrites state (traverse rewrite state.expr)) inputexpr.signal
+main = lift (\state -> let
+        renderedExpr = traverse render state.expr state
+        renderedHistory = renderHistory state.history
+        renderedRewrites = renderRewrites state (traverse rewrite state.expr)
+    in
+        renderedRewrites `beside` (renderedExpr `above` renderedHistory)) inputexpr.signal
