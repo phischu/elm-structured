@@ -49,7 +49,8 @@ keyword : String -> Element
 keyword s = leftAligned (toText s)
 
 
-
+type RewriteName = [String]
+type Rewrite a = State -> [(State,(RewriteName,a))]
 
 rewrite : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
 rewrite uid exprf state =
@@ -61,6 +62,53 @@ rewriteSelected : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
 rewriteSelected uid exprf = bindRewrite (rewriteStandard uid exprf) (\expr ->
     manyRewrites (map (\r -> r expr) [
         commute,assocl,assocr,zerol,zeror]))
+
+rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
+rewriteStandard uid exprf = case exprf of
+    PlusF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
+        bindRewrite rhsRewrite (\rhs -> returnRewrite (plus uid lhs rhs)))
+    ZeroF -> returnRewrite (zero uid)
+    VariableF name -> returnRewrite (variable uid name)
+
+
+singleRewrite : String -> a -> Rewrite a
+singleRewrite n a s = [(s,([n],a))]
+
+noRewrite : Rewrite a
+noRewrite s = []
+
+manyRewrites : [Rewrite a] -> Rewrite a
+manyRewrites = foldr (\r1 r2 s -> r1 s ++ r2 s) noRewrite
+
+newuid : Rewrite UID
+newuid s = [({s | nextuid <- s.nextuid + 1},([],s.nextuid))]
+
+returnRewrite : a -> Rewrite a
+returnRewrite a s = [(s,([],a))]
+
+mapRewrite : (a -> b) -> Rewrite a -> Rewrite b
+mapRewrite f smna s = mapRewrite' f (smna s)
+
+mapRewrite' : (a -> b) -> [(State,(RewriteName,a))] -> [(State,(RewriteName,b))]
+mapRewrite' f lsna = case lsna of
+    [] -> []
+    (s',(n,a)) :: rest -> (s',(n,f a)) :: mapRewrite' f rest
+
+bindRewrite : Rewrite a -> (a -> Rewrite b) -> Rewrite b
+bindRewrite smna amsnb s = bindRewrite' (smna s) amsnb
+
+bindRewrite' : [(State,(RewriteName,a))] -> (a -> Rewrite b) -> [(State,(RewriteName,b))]
+bindRewrite' snas f = case snas of
+    [] -> []
+    ((s,(n,a)) :: rest) -> map (\(s',(n',b)) -> (s',(n++n',b))) (f a s) ++ bindRewrite' rest f
+
+renderRewrites : State -> Rewrite Expr -> Element
+renderRewrites state rs = flow down (map renderRewrite (rs state))
+
+renderRewrite : (State,(RewriteName,Expr)) -> Element
+renderRewrite (state,(name,expr)) = keyword (show name)
+    |> clickable inputexpr.handle {state | expr <- expr}
+
 
 commute : Expr -> Rewrite Expr
 commute expr = case expr of
@@ -105,52 +153,6 @@ zeror expr = case expr of
                 ZeroF -> singleRewrite "zeror" lhs
                 _ -> noRewrite
         _ -> noRewrite
-
-rewriteStandard : UID -> ExprF (Rewrite Expr) -> Rewrite Expr
-rewriteStandard uid exprf = case exprf of
-    PlusF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
-        bindRewrite rhsRewrite (\rhs -> returnRewrite (plus uid lhs rhs)))
-    ZeroF -> returnRewrite (zero uid)
-    VariableF name -> returnRewrite (variable uid name)
-
-
-type RewriteName = [String]
-type Rewrite a = State -> [(State,(RewriteName,a))]
-
-singleRewrite : String -> a -> Rewrite a
-singleRewrite n a s = [(s,([n],a))]
-
-noRewrite : Rewrite a
-noRewrite s = []
-
-manyRewrites : [Rewrite a] -> Rewrite a
-manyRewrites = foldr (\r1 r2 s -> r1 s ++ r2 s) noRewrite
-
-returnRewrite : a -> Rewrite a
-returnRewrite a s = [(s,([],a))]
-
-mapRewrite : (a -> b) -> Rewrite a -> Rewrite b
-mapRewrite f smna s = mapRewrite' f (smna s)
-
-mapRewrite' : (a -> b) -> [(State,(RewriteName,a))] -> [(State,(RewriteName,b))]
-mapRewrite' f lsna = case lsna of
-    [] -> []
-    (s',(n,a)) :: rest -> (s',(n,f a)) :: mapRewrite' f rest
-
-bindRewrite : Rewrite a -> (a -> Rewrite b) -> Rewrite b
-bindRewrite smna amsnb s = bindRewrite' (smna s) amsnb
-
-bindRewrite' : [(State,(RewriteName,a))] -> (a -> Rewrite b) -> [(State,(RewriteName,b))]
-bindRewrite' snas f = case snas of
-    [] -> []
-    ((s,(n,a)) :: rest) -> map (\(s',(n',b)) -> (s',(n++n',b))) (f a s) ++ bindRewrite' rest f
-
-renderRewrites : State -> Rewrite Expr -> Element
-renderRewrites state rs = flow down (map renderRewrite (rs state))
-
-renderRewrite : (State,(RewriteName,Expr)) -> Element
-renderRewrite (state,(name,expr)) = keyword (show name)
-    |> clickable inputexpr.handle {state | expr <- expr}
 
 main = lift (\state ->
     traverse render state.expr state `beside`
