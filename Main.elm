@@ -127,6 +127,39 @@ renderRewrite (state,(name,expr)) = keyword (show name)
     |> clickable inputexpr.handle {state | expr <- expr}
 
 
+equalModuloUIDs : Expr -> Expr -> Bool
+equalModuloUIDs expr1 expr2 = case expr1 of
+    Expr _ exprf1 -> case expr2 of
+        Expr _ exprf2 -> case exprf1 of
+            PlusF lhs1 rhs1 -> case exprf2 of
+                PlusF lhs2 rhs2 -> equalModuloUIDs lhs1 lhs2 && equalModuloUIDs rhs1 rhs2
+                _ -> False
+            TimesF lhs1 rhs1 -> case exprf2 of
+                TimesF lhs2 rhs2 -> equalModuloUIDs lhs1 lhs2 && equalModuloUIDs rhs1 rhs2
+                _ -> False
+            ValueF i1 -> case exprf2 of
+                ValueF i2 -> i1 == i2
+                _ -> False
+            VariableF name1 -> case exprf2 of
+                VariableF name2 -> name1 == name2
+                _ -> False
+
+
+freshuids : Expr -> Rewrite Expr
+freshuids expr = case expr of
+    Expr _ exprf -> bindRewrite newuid (\uid ->
+        case exprf of
+            PlusF lhs rhs -> bindRewrite (freshuids lhs) (\freshlhs ->
+                bindRewrite (freshuids rhs) (\freshrhs ->
+                    returnRewrite (plus uid freshlhs freshrhs)))
+            TimesF lhs rhs -> bindRewrite (freshuids lhs) (\freshlhs ->
+                bindRewrite (freshuids rhs) (\freshrhs ->
+                    returnRewrite (times uid freshlhs freshrhs)))
+            ValueF i ->
+                returnRewrite (value uid i)
+            VariableF name ->
+                returnRewrite (variable uid name))
+
 commuteplus : Expr -> Rewrite Expr
 commuteplus expr = case expr of
     Expr uid exprf -> case exprf of
@@ -247,12 +280,63 @@ addonertimes expr = case expr of
             bindRewrite newuid (\ruid ->
                 singleRewrite "addoner" (times uid (Expr luid exprf) (one ruid))))
 
+distributel : Expr -> Rewrite Expr
+distributel expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case rhs of
+            Expr rhsuid rhsexprf -> case rhsexprf of
+                PlusF rlhs rrhs -> bindRewrite newuid (\lhsuid ->
+                    bindRewrite (freshuids lhs) (\freshlhs ->
+                        singleRewrite "distributel" (plus uid (times lhsuid freshlhs rlhs) (times rhsuid lhs rrhs))))
+                _ -> noRewrite
+        _ -> noRewrite
+
+distributer : Expr -> Rewrite Expr
+distributer expr = case expr of
+    Expr uid exprf -> case exprf of
+        TimesF lhs rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                PlusF llhs lrhs -> bindRewrite newuid (\rhsuid ->
+                    bindRewrite (freshuids rhs) (\freshrhs ->
+                        singleRewrite "distributer" (plus uid (times lhsuid llhs freshrhs) (times rhsuid lrhs rhs))))
+                _ -> noRewrite
+        _ -> noRewrite
+
+factoroutl : Expr -> Rewrite Expr
+factoroutl expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                TimesF llhs lrhs -> case rhs of
+                    Expr rhsuid rhsexprf -> case rhsexprf of
+                        TimesF rlhs rrhs -> if equalModuloUIDs llhs rlhs
+                            then singleRewrite "factoroutl" (times uid llhs (plus lhsuid lrhs rrhs))
+                            else noRewrite
+                        _ -> noRewrite
+                _ -> noRewrite
+        _ -> noRewrite
+
+factoroutr : Expr -> Rewrite Expr
+factoroutr expr = case expr of
+    Expr uid exprf -> case exprf of
+        PlusF lhs rhs -> case lhs of
+            Expr lhsuid lhsexprf -> case lhsexprf of
+                TimesF llhs lrhs -> case rhs of
+                    Expr rhsuid rhsexprf -> case rhsexprf of
+                        TimesF rlhs rrhs -> if equalModuloUIDs lrhs rrhs
+                            then singleRewrite "factoroutr" (times uid (plus lhsuid llhs rlhs) lrhs)
+                            else noRewrite
+                        _ -> noRewrite
+                _ -> noRewrite
+        _ -> noRewrite
+
 allRewrites : [Expr -> Rewrite Expr]
 allRewrites = [
     commuteplus,assoclplus,assocrplus,
     zerolplus,zerorplus,addzerolplus,addzerorplus,
     commutetimes,assocltimes,assocrtimes,
-    oneltimes,onertimes,addoneltimes,addonertimes]
+    oneltimes,onertimes,addoneltimes,addonertimes,
+    distributel,distributer,factoroutl,factoroutr]
 
 
 main = lift (\state ->
