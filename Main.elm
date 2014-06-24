@@ -3,7 +3,7 @@ import Text (leftAligned,toText)
 import Text as Text
 
 type UID = Int
-data ExprF a = PlusF a a | TimesF a a | ValueF Int | VariableF String
+data ExprF a = PlusF a a | TimesF a a | NegateF a | ValueF Int | VariableF String
 data Expr = Expr UID (ExprF Expr)
 type State = {nextuid : UID,selecteduid : UID,expr : Expr,history : [Expr],goal : Expr}
 
@@ -14,6 +14,7 @@ traverse f expr = case expr of
             case exprf of
                 PlusF lhs rhs -> PlusF (traverse f lhs) (traverse f rhs)
                 TimesF lhs rhs -> TimesF (traverse f lhs) (traverse f rhs)
+                NegateF e -> NegateF (traverse f e)
                 ValueF i -> ValueF i
                 VariableF name -> VariableF name)
 
@@ -35,11 +36,14 @@ zero uid = value uid 0
 one : UID -> Expr
 one uid = value uid 1
 
+negate : UID -> Expr -> Expr
+negate uid e = Expr uid (NegateF e)
+
 variable : UID -> String ->Expr
 variable uid name = Expr uid (VariableF name)
 
 testexpr : Expr
-testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (times 4 (zero 5) (variable 6 "y"))
+testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (times 4 (zero 5) (negate 6 (variable 7 "y")))
 
 goalexpr : Expr
 goalexpr = times 0 (value 1 2) (variable 3 "x")
@@ -50,13 +54,14 @@ render : UID -> ExprF Render -> Render
 render uid exprf state =
     (if uid == state.selecteduid then color lightYellow else id) (
         clickable inputexpr.handle {state | selecteduid <- uid} (
-            renderExprF 60 (applyState state exprf)))
+            renderExprF 80 (applyState state exprf)))
 
 applyState : State -> ExprF Render -> ExprF Element
 applyState state exprf =
     case exprf of
         PlusF lhs rhs -> PlusF (lhs state) (rhs state)
         TimesF lhs rhs -> TimesF (lhs state) (rhs state)
+        NegateF e -> NegateF (e state)
         ValueF i -> ValueF i
         VariableF name -> VariableF name
 
@@ -76,6 +81,11 @@ renderExprF h exprf = case exprf of
         lhs,
         keyword h "*",
         rhs,
+        keyword h ")"]
+    NegateF e -> flow right [
+        keyword h "(",
+        keyword h "-",
+        e,
         keyword h ")"]
     ValueF i -> keyword h (show i)
     VariableF name -> keyword h name
@@ -113,6 +123,7 @@ rewriteStandard uid exprf = case exprf of
         bindRewrite rhsRewrite (\rhs -> returnRewrite (plus uid lhs rhs)))
     TimesF lhsRewrite rhsRewrite -> bindRewrite lhsRewrite (\lhs ->
         bindRewrite rhsRewrite (\rhs -> returnRewrite (times uid lhs rhs)))
+    NegateF eRewrite -> bindRewrite eRewrite (\e -> returnRewrite (negate uid e))
     ValueF i -> returnRewrite (value uid i)
     VariableF name -> returnRewrite (variable uid name)
 
@@ -159,6 +170,9 @@ equalModuloUIDs expr1 expr2 = case expr1 of
             TimesF lhs1 rhs1 -> case exprf2 of
                 TimesF lhs2 rhs2 -> equalModuloUIDs lhs1 lhs2 && equalModuloUIDs rhs1 rhs2
                 _ -> False
+            NegateF e1 -> case exprf2 of
+                NegateF e2 -> equalModuloUIDs e1 e2
+                _ -> False
             ValueF i1 -> case exprf2 of
                 ValueF i2 -> i1 == i2
                 _ -> False
@@ -177,6 +191,8 @@ freshuids expr = case expr of
             TimesF lhs rhs -> bindRewrite (freshuids lhs) (\freshlhs ->
                 bindRewrite (freshuids rhs) (\freshrhs ->
                     returnRewrite (times uid freshlhs freshrhs)))
+            NegateF e -> bindRewrite (freshuids e) (\freshe ->
+                returnRewrite (negate uid freshe))
             ValueF i ->
                 returnRewrite (value uid i)
             VariableF name ->
