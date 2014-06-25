@@ -46,21 +46,26 @@ variable : UID -> String ->Expr
 variable uid name = Expr uid (VariableF name)
 
 testexpr : Expr
-testexpr = plus 0 (plus 1 (variable 2 "x") (variable 3 "x")) (times 4 (zero 5) (negate 6 (variable 7 "y")))
+testexpr = plus 0 (plus 1 (variable 2 "a") (variable 3 "a")) (times 4 (value 5 0) (negate 6 (variable 7 "b")))
 
 goalexpr : Expr
-goalexpr = times 0 (value 1 2) (variable 3 "x")
+goalexpr = times 0 (value 1 2) (variable 2 "a")
 
 type Render = State -> Element
 
 render : UID -> UID -> ExprF Render -> Render
 render hovereduid uid exprf state = exprf
     |> applyState state
-    |> renderExprF (\s -> keyword 80 s
+    |> renderExprF (\s -> keyword 60 s
         |> clickable inputexpr.handle {state | selecteduid <- uid}
         |> hoverable hoverinput.handle (\b -> if b then uid else -1))
-    |> (if uid == hovereduid then color lightRed else id)
-    |> (if uid == state.selecteduid then color lightYellow else id)
+    |> (if uid == hovereduid
+        then if uid == state.selecteduid
+                then color lightYellow
+                else color lightOrange
+        else if uid == state.selecteduid
+                then color lightYellow
+                else id)
 
 applyState : State -> ExprF Render -> ExprF Element
 applyState state exprf =
@@ -72,7 +77,8 @@ applyState state exprf =
         VariableF name -> VariableF name
 
 renderHistory : [Expr] -> Element
-renderHistory = flow down . map (traverse (\_ -> renderExprF (keyword 30)))
+renderHistory = flow down . map (
+    container 800 40 midLeft . (traverse (\_ -> renderExprF (keyword 24))))
 
 renderExprF : (String -> Element) -> ExprF Element -> Element
 renderExprF r exprf = case exprf of
@@ -100,14 +106,15 @@ renderRewrites : State -> Rewrite Expr -> Element
 renderRewrites state rs = flow down (map renderRewrite (rs state))
 
 renderRewrite : (State,(RewriteName,Expr)) -> Element
-renderRewrite (state,(name,expr)) = keyword 40 (concat name)
-    |> container 390 90 middle
-    |> color lightBlue
-    |> container 400 100 middle
+renderRewrite (state,(name,expr)) = Text.leftAligned (Text.height 24 (toText (concat name)))
+    |> container 290 60 middle
+    |> color white
+    |> container 300 70 middle
+    |> color blue
     |> clickable inputexpr.handle {state | expr <- expr, history <- state.expr :: state.history}
 
 keyword : Float -> String -> Element
-keyword h s = Text.leftAligned (Text.height h (toText s))
+keyword h s = Text.leftAligned (Text.monospace (Text.height h (toText s)))
 
 
 type RewriteName = [String]
@@ -207,7 +214,7 @@ freshuids expr = case expr of
 commuteplus : Expr -> Rewrite Expr
 commuteplus expr = case expr of
     Expr uid exprf -> case exprf of
-        PlusF lhs rhs -> singleRewrite "commute plus" (plus uid rhs lhs)
+        PlusF lhs rhs -> singleRewrite "commute plus\nx + y => y + x" (plus uid rhs lhs)
         _ -> noRewrite
 
 assoclplus : Expr -> Rewrite Expr
@@ -479,8 +486,9 @@ main = lift2 (\state hovereduid -> let
         renderedExpr = traverse (render hovereduid) state.expr state
         renderedHistory = renderHistory state.history
         renderedRewrites = renderRewrites state (traverse rewrite state.expr)
-        renderedGoal = keyword 30 "Goal: " `beside` traverse (\_ -> renderExprF (keyword 30)) state.goal
+        renderedGoal = keyword 24 "Goal: " `beside` traverse (\_ -> renderExprF (keyword 24)) state.goal
             |> color lightGreen
             |> container 400 60 midLeft
+        renderedRightSide = spacer 50 100 `beside` flow down [renderedGoal,renderedExpr,renderedHistory]
     in
-        renderedRewrites `beside` flow down [renderedGoal,renderedExpr,renderedHistory]) inputexpr.signal hoverinput.signal
+        renderedRewrites `beside` renderedRightSide) inputexpr.signal hoverinput.signal
