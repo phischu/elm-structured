@@ -1,6 +1,7 @@
 import Graphics.Input (Input,input,clickable,hoverable)
 import Text (leftAligned,toText)
 import Text as Text
+import Window as Window
 
 type UID = Int
 data ExprF a = PlusF a a | TimesF a a | NegateF a | ValueF Int | VariableF String
@@ -53,20 +54,6 @@ goalexpr = times 0 (value 1 2) (variable 2 "a")
 
 type Render = State -> Element
 
-render : UID -> UID -> ExprF Render -> Render
-render hovereduid uid exprf state = exprf
-    |> applyState state
-    |> renderExprF (\s -> keyword 60 s
-        |> clickable inputexpr.handle {state | selecteduid <- uid}
-        |> hoverable hoverinput.handle (\b -> if b then uid else -1))
-    |> (if uid == hovereduid
-        then if uid == state.selecteduid
-                then color lightYellow
-                else color lightOrange
-        else if uid == state.selecteduid
-                then color lightYellow
-                else id)
-
 applyState : State -> ExprF Render -> ExprF Element
 applyState state exprf =
     case exprf of
@@ -76,9 +63,53 @@ applyState state exprf =
         ValueF i -> ValueF i
         VariableF name -> VariableF name
 
+colordirection = degrees 230
+backgroundcolor = hsl colordirection 0.95 0.95
+rewritecolor = hsl colordirection 0.7 0.6
+hovercolor = hsl colordirection 0.8 0.8
+selectedcolor = hsl colordirection 0.7 0.6
+goalcolor = backgroundcolor
+
+
+main = lift3 renderMain Window.dimensions inputexpr.signal hoverinput.signal
+
+renderMain : (Int,Int) -> State -> UID -> Element
+renderMain (w,h) state hovereduid = let
+        renderedExpr = traverse (render hovereduid) state.expr state
+        renderedHistory = renderHistory state.history
+        renderedRewrites = renderRewrites state (traverse rewrite state.expr)
+        renderedGoal = keyword 24 "Goal: " `beside` traverse (\_ -> renderExprF (keyword 24)) state.goal
+            |> color goalcolor
+            |> container 400 60 midLeft
+        renderedRightSide = spacer 20 100 `beside` flow down [renderedGoal,renderedExpr,renderedHistory]
+        outerContainer = renderedRewrites `beside` renderedRightSide
+            |> container w h topLeft
+            |> color backgroundcolor
+    in
+        outerContainer
+
+render : UID -> UID -> ExprF Render -> Render
+render hovereduid uid exprf state = exprf
+    |> applyState state
+    |> renderExprF (\s -> keyword 60 s
+        |> clickable inputexpr.handle {state | selecteduid <- uid}
+        |> hoverable hoverinput.handle (\b -> if b then uid else -1))
+    |> (if uid == state.selecteduid then color selectedcolor else id)
+    |> (if uid == hovereduid then color hovercolor else id)
+
 renderHistory : [Expr] -> Element
 renderHistory = flow down . map (
     container 800 40 midLeft . (traverse (\_ -> renderExprF (keyword 24))))
+
+renderRewrites : State -> Rewrite Expr -> Element
+renderRewrites state rs = flow down (map renderRewrite (rs state))
+
+renderRewrite : (State,(RewriteName,Expr)) -> Element
+renderRewrite (state,(name,expr)) = Text.leftAligned (Text.height 24 (toText (concat name)))
+    |> container 290 70 middle
+    |> color rewritecolor
+    |> container 300 80 middle
+    |> clickable inputexpr.handle {state | expr <- expr, history <- state.expr :: state.history}
 
 renderExprF : (String -> Element) -> ExprF Element -> Element
 renderExprF r exprf = case exprf of
@@ -101,17 +132,6 @@ renderExprF r exprf = case exprf of
         r ")"]
     ValueF i -> r (show i)
     VariableF name -> r name
-
-renderRewrites : State -> Rewrite Expr -> Element
-renderRewrites state rs = flow down (map renderRewrite (rs state))
-
-renderRewrite : (State,(RewriteName,Expr)) -> Element
-renderRewrite (state,(name,expr)) = Text.leftAligned (Text.height 24 (toText (concat name)))
-    |> container 290 60 middle
-    |> color white
-    |> container 300 70 middle
-    |> color blue
-    |> clickable inputexpr.handle {state | expr <- expr, history <- state.expr :: state.history}
 
 keyword : Float -> String -> Element
 keyword h s = Text.leftAligned (Text.monospace (Text.height h (toText s)))
@@ -481,14 +501,3 @@ allRewrites = [
     addzerolplus,addzerorplus,
     addoneltimes,addonertimes]
 
-
-main = lift2 (\state hovereduid -> let
-        renderedExpr = traverse (render hovereduid) state.expr state
-        renderedHistory = renderHistory state.history
-        renderedRewrites = renderRewrites state (traverse rewrite state.expr)
-        renderedGoal = keyword 24 "Goal: " `beside` traverse (\_ -> renderExprF (keyword 24)) state.goal
-            |> color lightGreen
-            |> container 400 60 midLeft
-        renderedRightSide = spacer 50 100 `beside` flow down [renderedGoal,renderedExpr,renderedHistory]
-    in
-        renderedRewrites `beside` renderedRightSide) inputexpr.signal hoverinput.signal
